@@ -1,0 +1,27 @@
+[
+  {
+    "id": "rendaku-nakigoe",
+    "surface": "泣き声",
+    "actual_reading": "なきごえ",
+    "competing_reading": "なきこえ",
+    "actual_romaji": "nakigoe",
+    "competing_romaji": "nakikoe"
+  },
+  {
+    "id": "mezameta",
+    "surface": "目覚めた",
+    "actual_reading": "めざめた",
+    "competing_reading": "めさめた",
+    "actual_romaji": "mezameta",
+    "competing_romaji": "mesameta"
+  },
+  {
+    "id": "song-specific-sora",
+    "surface": "宇宙",
+    "actual_reading": "そら",
+    "competing_reading": "うちゅう",
+    "actual_romaji": "sora",
+    "competing_romaji": "uchuu",
+    "note": "仅用于明确存在这种歌词特有读法的真实歌曲片段；不要拿普通读作うちゅう的歌曲验证。"
+  }
+]

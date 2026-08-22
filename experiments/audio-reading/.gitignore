@@ -1,0 +1,6 @@
+data/
+results/*.json
+*.wav
+*.flac
+*.mp3
+*.m4a
