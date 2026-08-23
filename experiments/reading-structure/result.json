@@ -1,0 +1,263 @@
+{
+  "source_song": {
+    "artist": "クリープハイプ",
+    "title": "おやすみ泣き声、さよなら歌姫",
+    "expected": {
+      "歌声": "うたごえ",
+      "泣き声": "なきごえ",
+      "歌姫": "うたひめ",
+      "無き声": "なきごえ"
+    }
+  },
+  "cases": [
+    {
+      "text": "歌声",
+      "pykakasi_whole": "うたごえ",
+      "pykakasi_after_janome_split": "うたごえ",
+      "janome_joined_reading": "うたごえ",
+      "tokens": [
+        {
+          "surface": "歌声",
+          "part_of_speech": "名詞,一般,*,*",
+          "base_form": "歌声",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "ウタゴエ",
+          "janome_reading_hira": "うたごえ",
+          "janome_phonetic": "ウタゴエ",
+          "pykakasi_for_token": "うたごえ"
+        }
+      ]
+    },
+    {
+      "text": "泣き声",
+      "pykakasi_whole": "なきこえ",
+      "pykakasi_after_janome_split": "なきこえ",
+      "janome_joined_reading": "なきごえ",
+      "tokens": [
+        {
+          "surface": "泣き声",
+          "part_of_speech": "名詞,一般,*,*",
+          "base_form": "泣き声",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "ナキゴエ",
+          "janome_reading_hira": "なきごえ",
+          "janome_phonetic": "ナキゴエ",
+          "pykakasi_for_token": "なきこえ"
+        }
+      ]
+    },
+    {
+      "text": "歌姫",
+      "pykakasi_whole": "うたひめ",
+      "pykakasi_after_janome_split": "うたひめ",
+      "janome_joined_reading": "うたひめ",
+      "tokens": [
+        {
+          "surface": "歌姫",
+          "part_of_speech": "名詞,一般,*,*",
+          "base_form": "歌姫",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "ウタヒメ",
+          "janome_reading_hira": "うたひめ",
+          "janome_phonetic": "ウタヒメ",
+          "pykakasi_for_token": "うたひめ"
+        }
+      ]
+    },
+    {
+      "text": "無き声",
+      "pykakasi_whole": "なきこえ",
+      "pykakasi_after_janome_split": "なきこえ",
+      "janome_joined_reading": "なきこえ",
+      "tokens": [
+        {
+          "surface": "無き",
+          "part_of_speech": "形容詞,自立,*,*",
+          "base_form": "無い",
+          "infl_type": "形容詞・アウオ段",
+          "infl_form": "体言接続",
+          "janome_reading": "ナキ",
+          "janome_reading_hira": "なき",
+          "janome_phonetic": "ナキ",
+          "pykakasi_for_token": "なき"
+        },
+        {
+          "surface": "声",
+          "part_of_speech": "名詞,一般,*,*",
+          "base_form": "声",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "コエ",
+          "janome_reading_hira": "こえ",
+          "janome_phonetic": "コエ",
+          "pykakasi_for_token": "こえ"
+        }
+      ]
+    },
+    {
+      "text": "歌声 歌声 でも君は泣いていたんだね",
+      "pykakasi_whole": "うたごえ うたごえ でもくんはないていたんだね",
+      "pykakasi_after_janome_split": "うたごえ うたごえ でもくんはないていたんだね",
+      "janome_joined_reading": "うたごえうたごえでもきみはないていたんだね",
+      "tokens": [
+        {
+          "surface": "歌声",
+          "part_of_speech": "名詞,一般,*,*",
+          "base_form": "歌声",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "ウタゴエ",
+          "janome_reading_hira": "うたごえ",
+          "janome_phonetic": "ウタゴエ",
+          "pykakasi_for_token": "うたごえ"
+        },
+        {
+          "surface": " ",
+          "part_of_speech": "記号,空白,*,*",
+          "base_form": " ",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "*",
+          "janome_reading_hira": null,
+          "janome_phonetic": "*",
+          "pykakasi_for_token": " "
+        },
+        {
+          "surface": "歌声",
+          "part_of_speech": "名詞,一般,*,*",
+          "base_form": "歌声",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "ウタゴエ",
+          "janome_reading_hira": "うたごえ",
+          "janome_phonetic": "ウタゴエ",
+          "pykakasi_for_token": "うたごえ"
+        },
+        {
+          "surface": " ",
+          "part_of_speech": "記号,空白,*,*",
+          "base_form": " ",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "*",
+          "janome_reading_hira": null,
+          "janome_phonetic": "*",
+          "pykakasi_for_token": " "
+        },
+        {
+          "surface": "でも",
+          "part_of_speech": "接続詞,*,*,*",
+          "base_form": "でも",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "デモ",
+          "janome_reading_hira": "でも",
+          "janome_phonetic": "デモ",
+          "pykakasi_for_token": "でも"
+        },
+        {
+          "surface": "君",
+          "part_of_speech": "名詞,代名詞,一般,*",
+          "base_form": "君",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "キミ",
+          "janome_reading_hira": "きみ",
+          "janome_phonetic": "キミ",
+          "pykakasi_for_token": "くん"
+        },
+        {
+          "surface": "は",
+          "part_of_speech": "助詞,係助詞,*,*",
+          "base_form": "は",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "ハ",
+          "janome_reading_hira": "は",
+          "janome_phonetic": "ワ",
+          "pykakasi_for_token": "は"
+        },
+        {
+          "surface": "泣い",
+          "part_of_speech": "動詞,自立,*,*",
+          "base_form": "泣く",
+          "infl_type": "五段・カ行イ音便",
+          "infl_form": "連用タ接続",
+          "janome_reading": "ナイ",
+          "janome_reading_hira": "ない",
+          "janome_phonetic": "ナイ",
+          "pykakasi_for_token": "ない"
+        },
+        {
+          "surface": "て",
+          "part_of_speech": "助詞,接続助詞,*,*",
+          "base_form": "て",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "テ",
+          "janome_reading_hira": "て",
+          "janome_phonetic": "テ",
+          "pykakasi_for_token": "て"
+        },
+        {
+          "surface": "い",
+          "part_of_speech": "動詞,非自立,*,*",
+          "base_form": "いる",
+          "infl_type": "一段",
+          "infl_form": "連用形",
+          "janome_reading": "イ",
+          "janome_reading_hira": "い",
+          "janome_phonetic": "イ",
+          "pykakasi_for_token": "い"
+        },
+        {
+          "surface": "た",
+          "part_of_speech": "助動詞,*,*,*",
+          "base_form": "た",
+          "infl_type": "特殊・タ",
+          "infl_form": "基本形",
+          "janome_reading": "タ",
+          "janome_reading_hira": "た",
+          "janome_phonetic": "タ",
+          "pykakasi_for_token": "た"
+        },
+        {
+          "surface": "ん",
+          "part_of_speech": "名詞,非自立,一般,*",
+          "base_form": "ん",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "ン",
+          "janome_reading_hira": "ん",
+          "janome_phonetic": "ン",
+          "pykakasi_for_token": "ん"
+        },
+        {
+          "surface": "だ",
+          "part_of_speech": "助動詞,*,*,*",
+          "base_form": "だ",
+          "infl_type": "特殊・ダ",
+          "infl_form": "基本形",
+          "janome_reading": "ダ",
+          "janome_reading_hira": "だ",
+          "janome_phonetic": "ダ",
+          "pykakasi_for_token": "だ"
+        },
+        {
+          "surface": "ね",
+          "part_of_speech": "助詞,終助詞,*,*",
+          "base_form": "ね",
+          "infl_type": "*",
+          "infl_form": "*",
+          "janome_reading": "ネ",
+          "janome_reading_hira": "ね",
+          "janome_phonetic": "ネ",
+          "pykakasi_for_token": "ね"
+        }
+      ]
+    }
+  ]
+}
