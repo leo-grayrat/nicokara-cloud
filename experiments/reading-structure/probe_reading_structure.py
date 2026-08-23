@@ -9,11 +9,11 @@ from pykakasi import kakasi
 
 
 DEFAULT_CASES = [
+    "歌声",
     "泣き声",
-    "目覚めた",
-    "物語",
-    "今日",
-    "大人しい",
+    "歌姫",
+    "無き声",
+    "歌声 歌声 でも君は泣いていたんだね",
 ]
 
 _CONVERTER = kakasi()
@@ -70,13 +70,26 @@ def main() -> None:
     parser.add_argument(
         "texts",
         nargs="*",
-        help="Japanese strings to inspect. Uses built-in cases when omitted.",
+        help=(
+            "Japanese strings to inspect. Uses target words from "
+            "CreepHyp's おやすみ泣き声、さよなら歌姫 when omitted."
+        ),
     )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
     payload = {
-        "cases": [inspect_text(text) for text in (args.texts or DEFAULT_CASES)]
+        "source_song": {
+            "artist": "クリープハイプ",
+            "title": "おやすみ泣き声、さよなら歌姫",
+            "expected": {
+                "歌声": "うたごえ",
+                "泣き声": "なきごえ",
+                "歌姫": "うたひめ",
+                "無き声": "なきごえ",
+            },
+        },
+        "cases": [inspect_text(text) for text in (args.texts or DEFAULT_CASES)],
     }
     rendered = json.dumps(payload, ensure_ascii=False, indent=2)
 
