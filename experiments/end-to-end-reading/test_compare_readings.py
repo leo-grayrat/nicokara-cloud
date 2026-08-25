@@ -39,3 +39,43 @@ def test_collect_target_readings_finds_exact_tokens_and_provider() -> None:
         "泣き声": ["なきこえ"],
         "君": ["くん"],
     }
+
+
+def test_collect_target_readings_reconstructs_targets_across_tokens() -> None:
+    payload = {
+        "provider": "local",
+        "lines": [
+            {
+                "surface": "歌声 泣き声 歌姫 無き声 君",
+                "tokens": [
+                    {"surface": "歌", "reading": "うた"},
+                    {"surface": "声", "reading": "ごえ"},
+                    {"surface": " ", "reading": " "},
+                    {"surface": "泣", "reading": "な"},
+                    {"surface": "き", "reading": "き"},
+                    {"surface": "声", "reading": "ごえ"},
+                    {"surface": " ", "reading": " "},
+                    {"surface": "歌", "reading": "うた"},
+                    {"surface": "姫", "reading": "ひめ"},
+                    {"surface": " ", "reading": " "},
+                    {"surface": "無", "reading": "な"},
+                    {"surface": "き", "reading": "き"},
+                    {"surface": "声", "reading": "こえ"},
+                    {"surface": " ", "reading": " "},
+                    {"surface": "君", "reading": "きみ"},
+                ],
+            }
+        ],
+    }
+
+    result = collect_target_readings(
+        payload, ["歌声", "泣き声", "歌姫", "無き声", "君"]
+    )
+
+    assert result["targets"] == {
+        "歌声": ["うたごえ"],
+        "泣き声": ["なきごえ"],
+        "歌姫": ["うたひめ"],
+        "無き声": ["なきこえ"],
+        "君": ["きみ"],
+    }

@@ -10,12 +10,20 @@ DEFAULT_TARGETS = ["歌声", "泣き声", "歌姫", "無き声", "君"]
 def collect_target_readings(payload: dict, targets: list[str]) -> dict:
     found: dict[str, list[str]] = {target: [] for target in targets}
     for line in payload.get("lines", []):
-        for token in line.get("tokens", []):
-            surface = str(token.get("surface", ""))
-            if surface in found:
-                reading = str(token.get("reading", ""))
-                if reading not in found[surface]:
-                    found[surface].append(reading)
+        tokens = line.get("tokens", [])
+        for target in targets:
+            for start in range(len(tokens)):
+                surface = ""
+                reading = ""
+                for token in tokens[start:]:
+                    surface += str(token.get("surface", ""))
+                    reading += str(token.get("reading", ""))
+                    if surface == target:
+                        if reading not in found[target]:
+                            found[target].append(reading)
+                        break
+                    if not target.startswith(surface):
+                        break
     return {
         "provider": str(payload.get("provider", "unknown")),
         "targets": found,
