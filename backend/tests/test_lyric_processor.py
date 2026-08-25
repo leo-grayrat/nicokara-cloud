@@ -281,6 +281,36 @@ def test_deepseek_reviewer_marks_success_when_no_patch_is_needed() -> None:
     assert reviewed.warnings == local.warnings
 
 
+def test_deepseek_reviewer_allows_only_surface_anchored_spaces() -> None:
+    processor_module = importlib.import_module("app.lyrics.processor")
+    local = processor_module.LocalJapaneseLyricProcessor().process("泣き 声")
+    reviewer = processor_module.DeepSeekReadingReviewer(
+        client=FakeJsonClient(
+            {
+                "corrections": [
+                    {
+                        "line_index": 0,
+                        "start_token": 0,
+                        "end_token": 4,
+                        "surface": "泣き 声",
+                        "current_reading": "なき こえ",
+                        "corrected_reading": "なき ごえ",
+                    }
+                ]
+            }
+        )
+    )
+
+    reviewed = reviewer.review(local)
+
+    assert reviewed.lines[0].reading == "なき ごえ"
+    assert [(token.surface, token.reading) for token in reviewed.lines[0].tokens] == [
+        ("泣", "な"),
+        ("き ", "き "),
+        ("声", "ごえ"),
+    ]
+
+
 @pytest.mark.parametrize(
     ("text", "corrections", "message"),
     [
@@ -447,6 +477,34 @@ def test_deepseek_reviewer_marks_success_when_no_patch_is_needed() -> None:
             "empty token reading",
         ),
         (
+            "声",
+            [
+                {
+                    "line_index": 0,
+                    "start_token": 0,
+                    "end_token": 1,
+                    "surface": "声",
+                    "current_reading": "こえ",
+                    "corrected_reading": "こえ ",
+                }
+            ],
+            "kanji reading",
+        ),
+        (
+            "声",
+            [
+                {
+                    "line_index": 0,
+                    "start_token": 0,
+                    "end_token": 1,
+                    "surface": "声",
+                    "current_reading": "こえ",
+                    "corrected_reading": "こ え",
+                }
+            ],
+            "kanji reading",
+        ),
+        (
             "物語",
             [
                 {
@@ -458,7 +516,7 @@ def test_deepseek_reviewer_marks_success_when_no_patch_is_needed() -> None:
                     "corrected_reading": "あ ",
                 }
             ],
-            "empty token reading",
+            "kanji reading",
         ),
         (
             "無き声",

@@ -31,6 +31,7 @@ _FA_KARA_ROMAJI = re.compile(r"[A-Za-z']+")
 _LATIN_OR_DIGIT = re.compile(r"[A-Za-z0-9]")
 _HIRAGANA_READING = re.compile(r"[ぁ-ゖゝゞー・ 　]+")
 _HIRAGANA_CHARACTER = re.compile(r"[ぁ-ゖゝゞ]")
+_KANJI_SEGMENT_READING = re.compile(r"[ぁ-ゖゝゞー・]+")
 _SMALL_KANA = frozenset("ゃゅょぁぃぅぇぉゎゕゖっー")
 _READING_CONVERTER = kakasi()
 _FOREIGN_READING_PARTS = re.compile(r"[A-Za-z]+|[0-9]+|[^A-Za-z0-9]+")
@@ -351,9 +352,20 @@ class DeepSeekReadingReviewer:
                     else re.escape(_reading_for_literal_surface(segment))
                 )
             pattern_parts.append("$")
-            if re.fullmatch("".join(pattern_parts), corrected_reading) is None:
+            anchor_match = re.fullmatch(
+                "".join(pattern_parts),
+                corrected_reading,
+            )
+            if anchor_match is None:
                 raise LyricProcessingError(
                     "correction does not preserve literal kana"
+                )
+            if any(
+                _KANJI_SEGMENT_READING.fullmatch(reading) is None
+                for reading in anchor_match.groups()
+            ):
+                raise LyricProcessingError(
+                    "correction kanji reading contains invalid whitespace"
                 )
             replacement = split_token_by_kanji(
                 LyricToken(
