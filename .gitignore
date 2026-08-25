@@ -44,3 +44,7 @@ backend/data/
 storage/jobs/
 !storage/jobs/.gitkeep
 .env.local
+
+# Local end-to-end reading captures may contain full copyrighted lyrics.
+experiments/end-to-end-reading/local.json
+experiments/end-to-end-reading/deepseek.json
