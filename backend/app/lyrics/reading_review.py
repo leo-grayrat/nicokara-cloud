@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import re
-from typing import Any
+from typing import Any, Iterable
 
 from janome.tokenizer import Tokenizer
 
-from app.lyrics.models import LyricDocument, LyricLine
+from app.lyrics.models import LyricDocument, LyricLine, LyricToken
+from app.lyrics.pronunciation import pronunciation_segments
 
 
 _REVIEWABLE_SURFACE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaffA-Za-z0-9]")
+_VALID_CORRECTED_READING = re.compile(
+    r"[\u3040-\u30ff\u31f0-\u31ffーゝゞヽヾ・]+"
+)
 _NUMERIC_REVIEW_EXPRESSION = re.compile(
     r"(?:"
     r"[0-9０-９]+(?:万|億|兆)*分の[0-9０-９]+"
@@ -29,6 +33,20 @@ class ReadingReviewUnit:
     end_token: int
     surface: str
     reading: str
+
+
+@dataclass(frozen=True)
+class ReadingCorrection:
+    line_index: int
+    start_token: int
+    end_token: int
+    surface: str
+    current_reading: str
+    corrected_reading: str
+
+
+class ReadingReviewError(ValueError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -188,3 +206,113 @@ def document_review_payload(document: LyricDocument) -> dict[str, Any]:
             asdict(unit) for unit in line_review_units(line)
         ]
     return payload
+
+
+def _validate_corrections(
+    document: LyricDocument,
+    corrections: Iterable[ReadingCorrection],
+) -> dict[tuple[int, int, int], str]:
+    validated: dict[tuple[int, int, int], str] = {}
+    occupied: dict[int, list[tuple[int, int]]] = {}
+    units_by_line = [
+        {
+            (unit.start_token, unit.end_token): unit
+            for unit in line_review_units(line)
+        }
+        for line in document.lines
+    ]
+
+    for correction in corrections:
+        if not 0 <= correction.line_index < len(document.lines):
+            raise ReadingReviewError("歌词行号超出范围")
+        line = document.lines[correction.line_index]
+        if not (
+            0 <= correction.start_token
+            < correction.end_token
+            <= len(line.tokens)
+        ):
+            raise ReadingReviewError("审核单位范围超出词元边界")
+
+        for start, end in occupied.setdefault(correction.line_index, []):
+            if correction.start_token < end and start < correction.end_token:
+                raise ReadingReviewError("同一批修正包含重叠范围")
+        occupied[correction.line_index].append(
+            (correction.start_token, correction.end_token)
+        )
+
+        unit = units_by_line[correction.line_index].get(
+            (correction.start_token, correction.end_token)
+        )
+        if unit is None:
+            raise ReadingReviewError("修正范围不是服务端生成的审核单位")
+        selected = line.tokens[correction.start_token : correction.end_token]
+        if any(token.alignment_pronunciation is not None for token in selected):
+            raise ReadingReviewError("显式发音不能在注音确认阶段修改")
+        if (
+            correction.surface != unit.surface
+            or correction.surface
+            != "".join(token.surface for token in selected)
+        ):
+            raise ReadingReviewError("歌词表面文字与审核单位不一致")
+        if correction.current_reading != unit.reading:
+            raise ReadingReviewError("当前读音与审核单位不一致")
+        if _VALID_CORRECTED_READING.fullmatch(correction.corrected_reading) is None:
+            raise ReadingReviewError("修正读音必须是非空假名")
+
+        validated[
+            (
+                correction.line_index,
+                correction.start_token,
+                correction.end_token,
+            )
+        ] = correction.corrected_reading
+
+    return validated
+
+
+def apply_reading_corrections(
+    document: LyricDocument,
+    corrections: Iterable[ReadingCorrection],
+) -> LyricDocument:
+    validated = _validate_corrections(document, corrections)
+    reviewed_lines: list[LyricLine] = []
+
+    for line_index, line in enumerate(document.lines):
+        units = {
+            unit.start_token: unit
+            for unit in line_review_units(line)
+        }
+        reviewed_tokens: list[LyricToken] = []
+        token_index = 0
+        while token_index < len(line.tokens):
+            unit = units.get(token_index)
+            if unit is None:
+                reviewed_tokens.append(line.tokens[token_index])
+                token_index += 1
+                continue
+
+            reading = validated.get(
+                (line_index, unit.start_token, unit.end_token),
+                unit.reading,
+            )
+            reviewed_tokens.append(
+                LyricToken(
+                    surface=unit.surface,
+                    reading=reading,
+                    pronunciation_segments=pronunciation_segments(
+                        unit.surface,
+                        reading,
+                    ),
+                )
+            )
+            token_index = unit.end_token
+
+        reviewed_lines.append(
+            replace(
+                line,
+                reading="".join(token.reading for token in reviewed_tokens),
+                tokens=reviewed_tokens,
+            )
+        )
+
+    return replace(document, lines=reviewed_lines)
