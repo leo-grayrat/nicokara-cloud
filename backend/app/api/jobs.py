@@ -47,6 +47,12 @@ from app.services.chunked_uploads import (
 from app.services.uploads import save_lyrics, save_mp4
 from app.lyrics.models import LyricDocument, lyric_document_from_dict
 from app.lyrics.processor import normalize_unconverted_foreign_readings
+from app.lyrics.reading_review import (
+    ReadingCorrection,
+    ReadingReviewError,
+    apply_reading_corrections,
+    document_review_payload,
+)
 from app.subtitle.kirakara_generator import KirakaraAssConfig, KirakaraAssGenerator
 
 
@@ -1094,14 +1100,11 @@ def get_processed_lyrics(request: Request, job_id: str) -> Response:
             detail="歌词处理文件无法读取",
         ) from exc
     normalized = normalize_unconverted_foreign_readings(document)
-    if normalized is document:
-        return FileResponse(
-            lyrics_path,
-            media_type="application/json",
-            filename="lyrics_processed.json",
-        )
     return Response(
-        content=json.dumps(normalized.to_dict(), ensure_ascii=False),
+        content=json.dumps(
+            document_review_payload(normalized),
+            ensure_ascii=False,
+        ),
         media_type="application/json",
         headers={
             "Content-Disposition": 'attachment; filename="lyrics_processed.json"'
@@ -1165,64 +1168,26 @@ async def confirm_readings(
             detail="歌词处理文件无法读取",
         ) from exc
 
-    if len(payload.lines) != len(document.lines):
+    try:
+        reviewed_document = apply_reading_corrections(
+            normalize_unconverted_foreign_readings(document),
+            [
+                ReadingCorrection(
+                    line_index=correction.line_index,
+                    start_token=correction.start_token,
+                    end_token=correction.end_token,
+                    surface=correction.surface,
+                    current_reading=correction.current_reading,
+                    corrected_reading=correction.corrected_reading,
+                )
+                for correction in payload.corrections
+            ],
+        )
+    except ReadingReviewError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="歌词行数与处理结果不一致",
-        )
-
-    reviewed_lines = []
-    for source_line, reviewed_line in zip(
-        document.lines,
-        payload.lines,
-        strict=True,
-    ):
-        if reviewed_line.surface != source_line.surface:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="歌词表面文字不允许在注音确认阶段修改",
-            )
-        if len(reviewed_line.tokens) != len(source_line.tokens):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="歌词词元数量与处理结果不一致",
-            )
-
-        reviewed_tokens = []
-        for source_token, reviewed_token in zip(
-            source_line.tokens,
-            reviewed_line.tokens,
-            strict=True,
-        ):
-            if reviewed_token.surface != source_token.surface:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="歌词表面文字不允许在注音确认阶段修改",
-                )
-            if source_token.surface.isspace():
-                reviewed_tokens.append(source_token)
-                continue
-            reading = reviewed_token.reading.strip() or source_token.reading
-            reviewed_tokens.append(
-                replace(
-                    source_token,
-                    reading=reading,
-                    alignment_pronunciation=(
-                        source_token.alignment_pronunciation
-                        if reading == source_token.reading
-                        else None
-                    ),
-                )
-            )
-        reviewed_lines.append(
-            replace(
-                source_line,
-                reading="".join(token.reading for token in reviewed_tokens),
-                tokens=reviewed_tokens,
-            )
-        )
-
-    reviewed_document = replace(document, lines=reviewed_lines)
+            detail=str(exc),
+        ) from exc
     if not database.claim_reading_review(job_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

@@ -287,7 +287,20 @@ def test_processed_lyrics_can_be_downloaded(tmp_path: Path) -> None:
         lyrics_response = client.get(f"/api/v1/jobs/{job_id}/lyrics")
 
     assert lyrics_response.status_code == 200
-    assert lyrics_response.json() == processed
+    body = lyrics_response.json()
+    assert [
+        (token["surface"], token["reading"])
+        for token in body["lines"][0]["tokens"]
+    ] == [("物語", "ものがたり")]
+    assert body["lines"][0]["review_units"] == [
+        {
+            "start_token": 0,
+            "end_token": 1,
+            "surface": "物語",
+            "reading": "ものがたり",
+        }
+    ]
+    assert json.loads(lyrics_path.read_text(encoding="utf-8")) == processed
 
 
 def test_old_unconverted_foreign_readings_are_normalized_for_review(
@@ -348,7 +361,7 @@ def test_old_unconverted_foreign_readings_are_normalized_for_review(
     ]
 
 
-def test_reviewed_readings_preserve_whitespace_before_alignment_is_queued(
+def test_minimal_reading_correction_preserves_whitespace_and_protected_tokens(
     tmp_path: Path,
 ) -> None:
     class RecordingRunner:
@@ -417,14 +430,14 @@ def test_reviewed_readings_preserve_whitespace_before_alignment_is_queued(
         confirmed = client.post(
             f"/api/v1/jobs/{job_id}/readings",
             json={
-                "lines": [
+                "corrections": [
                     {
-                        "surface": "君 は",
-                        "tokens": [
-                            {"surface": "君", "reading": "きみ"},
-                            {"surface": " ", "reading": ""},
-                            {"surface": "は", "reading": "わ"},
-                        ],
+                        "line_index": 0,
+                        "start_token": 0,
+                        "end_token": 1,
+                        "surface": "君",
+                        "current_reading": "くん",
+                        "corrected_reading": "きみ",
                     }
                 ]
             },
@@ -435,15 +448,15 @@ def test_reviewed_readings_preserve_whitespace_before_alignment_is_queued(
         assert confirmed.json()["stage"] == "ALIGNMENT_QUEUED"
         assert runner.job_ids == [job_id]
         saved = json.loads(lyrics_path.read_text(encoding="utf-8"))
-        assert saved["lines"][0]["reading"] == "きみ わ"
+        assert saved["lines"][0]["reading"] == "きみ は"
         assert [token["reading"] for token in saved["lines"][0]["tokens"]] == [
             "きみ",
             " ",
-            "わ",
+            "は",
         ]
         assert saved["lines"][0]["tokens"][2][
             "alignment_pronunciation"
-        ] is None
+        ] == "wa"
 
 
 def test_reading_review_rejects_changed_lyric_structure(tmp_path: Path) -> None:
@@ -483,22 +496,30 @@ def test_reading_review_rejects_changed_lyric_structure(tmp_path: Path) -> None:
             progress=80,
             lyrics_processed_path=lyrics_path,
         )
+        original_bytes = lyrics_path.read_bytes()
 
         rejected = client.post(
             f"/api/v1/jobs/{job_id}/readings",
             json={
-                "lines": [
+                "corrections": [
                     {
+                        "line_index": 0,
+                        "start_token": 0,
+                        "end_token": 1,
                         "surface": "別の歌词",
-                        "tokens": [
-                            {"surface": "別の歌词", "reading": "べつのかし"}
-                        ],
+                        "current_reading": "ものがたり",
+                        "corrected_reading": "べつのかし",
                     }
                 ]
             },
         )
+        current_job = client.app.state.database.get_job(job_id)
 
     assert rejected.status_code == 422
+    assert lyrics_path.read_bytes() == original_bytes
+    assert current_job is not None
+    assert current_job["status"] == "LYRICS_PROCESSED"
+    assert current_job["stage"] == "READING_REVIEW_REQUIRED"
 
 
 def test_reading_review_uses_generated_reading_when_review_is_empty(
@@ -541,14 +562,7 @@ def test_reading_review_uses_generated_reading_when_review_is_empty(
 
         confirmed = client.post(
             f"/api/v1/jobs/{job_id}/readings",
-            json={
-                "lines": [
-                    {
-                        "surface": "君",
-                        "tokens": [{"surface": "君", "reading": ""}],
-                    }
-                ]
-            },
+            json={"corrections": []},
         )
 
         saved = json.loads(lyrics_path.read_text(encoding="utf-8"))
@@ -558,6 +572,14 @@ def test_reading_review_uses_generated_reading_when_review_is_empty(
     assert confirmed.json()["stage"] == "ALIGNMENT_QUEUED"
     assert saved["lines"][0]["reading"] == "きみ"
     assert saved["lines"][0]["tokens"][0]["reading"] == "きみ"
+    assert saved["lines"][0]["tokens"][0]["pronunciation_segments"] == [
+        {
+            "surface_start": 0,
+            "surface_end": 1,
+            "reading": "きみ",
+            "ruby": True,
+        }
+    ]
 
 
 def test_failed_job_can_be_retried_from_its_status_page(tmp_path: Path) -> None:

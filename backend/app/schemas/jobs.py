@@ -29,18 +29,17 @@ class JobResponse(BaseModel):
     updated_at: datetime
 
 
-class ReadingTokenReview(BaseModel):
+class ReadingCorrectionRequest(BaseModel):
+    line_index: int = Field(ge=0)
+    start_token: int = Field(ge=0)
+    end_token: int = Field(gt=0)
     surface: str = Field(min_length=1)
-    reading: str
-
-
-class ReadingLineReview(BaseModel):
-    surface: str = Field(min_length=1)
-    tokens: list[ReadingTokenReview] = Field(min_length=1)
+    current_reading: str = Field(min_length=1)
+    corrected_reading: str = Field(min_length=1)
 
 
 class ReadingReviewRequest(BaseModel):
-    lines: list[ReadingLineReview] = Field(min_length=1)
+    corrections: list[ReadingCorrectionRequest] = Field(default_factory=list)
 
 
 class UploadTicketCreate(BaseModel):
