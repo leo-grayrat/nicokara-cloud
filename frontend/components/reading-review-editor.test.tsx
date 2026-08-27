@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ReadingReviewEditor } from "./reading-review-editor";
 
 describe("ReadingReviewEditor", () => {
-  it("edits token readings before FA-Kara creates mora timing", () => {
+  it("shows only tokens whose readings require human judgment", () => {
     const html = renderToStaticMarkup(
       <ReadingReviewEditor
         lyrics={{
@@ -32,27 +32,29 @@ describe("ReadingReviewEditor", () => {
     expect(html).toContain("确认假名注音");
     expect(html).toContain("君は");
     expect(html).toContain('value="くん"');
-    expect(html).toContain('value="は"');
+    expect(html).not.toContain('value="は"');
+    expect(html.match(/<input/g)).toHaveLength(1);
     expect(html).toContain("保存注音并开始对齐");
     expect(html).not.toContain("设置时间轴");
   });
 
-  it("does not require a reading for whitespace lyric tokens", () => {
+  it("does not render kana, punctuation, or whitespace as review fields", () => {
     const html = renderToStaticMarkup(
       <ReadingReviewEditor
         lyrics={{
           provider: "local",
-          source_text: "君 は",
+          source_text: "君 は。",
           warnings: [],
           lines: [
             {
-              source: "君 は",
-              surface: "君 は",
-              reading: "きみ は",
+              source: "君 は。",
+              surface: "君 は。",
+              reading: "きみ は。",
               tokens: [
                 { surface: "君", reading: "きみ" },
                 { surface: " ", reading: " " },
                 { surface: "は", reading: "は" },
+                { surface: "。", reading: "。" },
               ],
             },
           ],
@@ -63,9 +65,50 @@ describe("ReadingReviewEditor", () => {
       />,
     );
 
-    expect(html.match(/<input/g)).toHaveLength(2);
-    expect(html).toContain('aria-label="空格，无需注音"');
+    expect(html.match(/<input/g)).toHaveLength(1);
+    expect(html).not.toContain('aria-label="空格，无需注音"');
+    expect(html).not.toContain('value="は"');
+    expect(html).not.toContain('value="。"');
     expect(html).not.toContain('<button type="button" disabled=""');
+  });
+
+  it("omits all-kana lines and explains when nothing needs review", () => {
+    const html = renderToStaticMarkup(
+      <ReadingReviewEditor
+        lyrics={{
+          provider: "local",
+          source_text: "きっと、またね\nキラキラ",
+          warnings: [],
+          lines: [
+            {
+              source: "きっと、またね",
+              surface: "きっと、またね",
+              reading: "きっと、またね",
+              tokens: [
+                { surface: "きっと", reading: "きっと" },
+                { surface: "、", reading: "、" },
+                { surface: "またね", reading: "またね" },
+              ],
+            },
+            {
+              source: "キラキラ",
+              surface: "キラキラ",
+              reading: "きらきら",
+              tokens: [{ surface: "キラキラ", reading: "きらきら" }],
+            },
+          ],
+        }}
+        submitting={false}
+        onChange={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain("没有需要人工确认的注音");
+    expect(html).not.toContain("1. きっと、またね");
+    expect(html).not.toContain("2. キラキラ");
+    expect(html).not.toContain("<input");
+    expect(html).toContain("保存注音并开始对齐");
   });
 
   it("warns when a foreign word still has an unconverted reading", () => {

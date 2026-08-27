@@ -5,9 +5,14 @@ import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
 import type { ProcessedLyrics } from "@/types/job";
 
 const LATIN_OR_DIGIT = /[A-Za-z0-9]/;
+const KANJI_LATIN_OR_DIGIT = /[\p{Script=Han}A-Za-z0-9]/u;
 
 function isForeignSurface(surface: string) {
   return LATIN_OR_DIGIT.test(surface);
+}
+
+function requiresReadingReview(surface: string) {
+  return KANJI_LATIN_OR_DIGIT.test(surface);
 }
 
 function hasUnconvertedForeignReading(surface: string, reading: string) {
@@ -35,6 +40,14 @@ export function ReadingReviewEditor({
     ).length,
     0,
   );
+  const reviewLines = lyrics.lines.map((line, lineIndex) => ({
+    line,
+    lineIndex,
+    tokens: line.tokens.map((token, tokenIndex) => ({
+      token,
+      tokenIndex,
+    })).filter(({ token }) => requiresReadingReview(token.surface)),
+  })).filter(({ tokens }) => tokens.length > 0);
 
   function updateReading(
     lineIndex: number,
@@ -63,7 +76,7 @@ export function ReadingReviewEditor({
         确认假名注音
       </h2>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        只需修改不准确的项目；留空将沿用系统生成的读音。
+        请检查含汉字、英文或数字的读音；留空将沿用系统生成的读音。
       </p>
       {foreignReadingCount > 0 && (
         <div
@@ -80,69 +93,63 @@ export function ReadingReviewEditor({
           </div>
         </div>
       )}
-      <div className="mt-4 max-h-[34rem] divide-y overflow-y-auto overscroll-contain border-y [scrollbar-gutter:stable]">
-        {lyrics.lines.map((line, lineIndex) => (
-          <section key={`${lineIndex}-${line.surface}`} className="py-4">
-            <h3 className="break-all text-sm font-bold">
-              {lineIndex + 1}. {line.surface}
-            </h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {line.tokens.map((token, tokenIndex) => {
-                const isWhitespace = token.surface.trim().length === 0;
-                if (isWhitespace) {
-                  return (
-                    <div
-                      key={`${tokenIndex}-${token.surface}`}
-                      aria-label="空格，无需注音"
-                      className="flex min-h-[4.25rem] min-w-0 items-center justify-center rounded-md border border-dashed bg-muted/40 px-3 text-xs font-medium text-muted-foreground"
-                    >
-                      空格
-                    </div>
+      {reviewLines.length === 0 ? (
+        <p className="mt-4 rounded-md border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          没有需要人工确认的注音。
+        </p>
+      ) : (
+        <div className="mt-4 max-h-[34rem] divide-y overflow-y-auto overscroll-contain border-y [scrollbar-gutter:stable]">
+          {reviewLines.map(({ line, lineIndex, tokens }) => (
+            <section key={`${lineIndex}-${line.surface}`} className="py-4">
+              <h3 className="break-all text-sm font-bold">
+                {lineIndex + 1}. {line.surface}
+              </h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {tokens.map(({ token, tokenIndex }) => {
+                  const requiresKanaConfirmation = isForeignSurface(
+                    token.surface,
                   );
-                }
-                const requiresKanaConfirmation = isForeignSurface(
-                  token.surface,
-                );
-                const hasInvalidKana = hasUnconvertedForeignReading(
-                  token.surface,
-                  token.reading,
-                );
-                return (
-                  <label
-                    key={`${tokenIndex}-${token.surface}`}
-                    className={`min-w-0 text-xs font-medium ${
-                      requiresKanaConfirmation
-                        ? "rounded-md border border-amber-500/70 bg-amber-50 p-2 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    <span className="block break-all text-sm font-semibold text-foreground">
-                      {token.surface}
-                    </span>
-                    <span className="sr-only">假名读音</span>
-                    <input
-                      type="text"
-                      value={token.reading}
-                      aria-invalid={hasInvalidKana || undefined}
-                      disabled={submitting}
-                      onChange={(event) => updateReading(
-                        lineIndex,
-                        tokenIndex,
-                        event.target.value,
-                      )}
-                      className={`focus-ring mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-60 ${
+                  const hasInvalidKana = hasUnconvertedForeignReading(
+                    token.surface,
+                    token.reading,
+                  );
+                  return (
+                    <label
+                      key={`${tokenIndex}-${token.surface}`}
+                      className={`min-w-0 text-xs font-medium ${
                         requiresKanaConfirmation
-                          ? "border-amber-600 ring-2 ring-amber-400/50"
-                          : ""
+                          ? "rounded-md border border-amber-500/70 bg-amber-50 p-2 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+                          : "text-muted-foreground"
                       }`}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+                    >
+                      <span className="block break-all text-sm font-semibold text-foreground">
+                        {token.surface}
+                      </span>
+                      <span className="sr-only">假名读音</span>
+                      <input
+                        type="text"
+                        value={token.reading}
+                        aria-invalid={hasInvalidKana || undefined}
+                        disabled={submitting}
+                        onChange={(event) => updateReading(
+                          lineIndex,
+                          tokenIndex,
+                          event.target.value,
+                        )}
+                        className={`focus-ring mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-60 ${
+                          requiresKanaConfirmation
+                            ? "border-amber-600 ring-2 ring-amber-400/50"
+                            : ""
+                        }`}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
       <button
         type="button"
         disabled={!valid || submitting}
