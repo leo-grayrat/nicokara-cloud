@@ -5,6 +5,7 @@ import importlib
 import pytest
 
 from app.alignment.models import AlignedLine, AlignedToken
+from app.lyrics.pronunciation import PronunciationSegment
 
 
 def test_ruby_is_created_for_kanji_runs_not_the_whole_mixed_token() -> None:
@@ -88,3 +89,71 @@ def test_ruby_placement_uses_measured_glyph_widths() -> None:
     )
 
     assert placements[0].x == 128
+
+
+def test_explicit_pronunciation_segments_define_ruby_ranges() -> None:
+    line = AlignedLine(
+        surface="泣き声",
+        reading="なきごえ",
+        start_ms=0,
+        end_ms=1000,
+        confidence=1.0,
+        tokens=[
+            AlignedToken(
+                "泣き声",
+                "なきごえ",
+                0,
+                1000,
+                1.0,
+                pronunciation_segments=[
+                    PronunciationSegment(0, 1, "な", True),
+                    PronunciationSegment(1, 2, "き", False),
+                    PronunciationSegment(2, 3, "ごえ", True),
+                ],
+            )
+        ],
+    )
+
+    placements = importlib.import_module("app.subtitle.ruby").ruby_placements(
+        line,
+        play_res_x=300,
+        baseline_y=100,
+        base_font_size=20,
+        center_x=150,
+    )
+
+    assert [placement.text for placement in placements] == ["な", "ごえ"]
+
+
+def test_atomic_pronunciation_segment_covers_the_whole_surface() -> None:
+    line = AlignedLine(
+        surface="80億分の1",
+        reading="にこから",
+        start_ms=0,
+        end_ms=1000,
+        confidence=1.0,
+        tokens=[
+            AlignedToken(
+                "80億分の1",
+                "にこから",
+                0,
+                1000,
+                1.0,
+                pronunciation_segments=[
+                    PronunciationSegment(0, 6, "にこから", True)
+                ],
+            )
+        ],
+    )
+
+    placements = importlib.import_module("app.subtitle.ruby").ruby_placements(
+        line,
+        play_res_x=300,
+        baseline_y=100,
+        base_font_size=20,
+        center_x=150,
+    )
+
+    assert [(placement.text, placement.token_index) for placement in placements] == [
+        ("にこから", 0)
+    ]

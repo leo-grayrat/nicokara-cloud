@@ -9,6 +9,7 @@ import pytest
 from app.ai.whisper import TranscriptDocument
 from app.alignment.models import LyricTimeline
 from app.lyrics.models import LyricDocument, LyricLine, LyricToken
+from app.lyrics.pronunciation import PronunciationSegment
 
 
 def sample_lyrics() -> LyricDocument:
@@ -21,7 +22,13 @@ def sample_lyrics() -> LyricDocument:
                 surface="君の",
                 reading="きみの",
                 tokens=[
-                    LyricToken(surface="君", reading="きみ"),
+                    LyricToken(
+                        surface="君",
+                        reading="きみ",
+                        pronunciation_segments=[
+                            PronunciationSegment(0, 1, "きみ", True)
+                        ],
+                    ),
                     LyricToken(surface="の", reading="の"),
                 ],
             )
@@ -88,6 +95,9 @@ def test_mms_aligner_maps_romanized_spans_to_existing_mora_timeline(
         ("の", 1390, 1600),
     ]
     assert timeline.confidence == pytest.approx((0.91 + 0.88 + 0.95) / 3)
+    assert timeline.lines[0].tokens[0].pronunciation_segments == [
+        PronunciationSegment(0, 1, "きみ", True)
+    ]
 
 
 def test_resilient_aligner_falls_back_and_records_actual_engine(

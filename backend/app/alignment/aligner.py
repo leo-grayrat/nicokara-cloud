@@ -101,6 +101,9 @@ class LyricTimelineAligner:
                         end_ms=end_ms,
                         confidence=token_confidence,
                         moras=token_moras,
+                        pronunciation_segments=(
+                            lyric_token.pronunciation_segments
+                        ),
                     )
                 )
             lines.append(

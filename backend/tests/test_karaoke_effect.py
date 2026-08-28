@@ -5,6 +5,7 @@ import importlib
 import pytest
 
 from app.alignment.models import AlignedLine, AlignedMora, AlignedToken
+from app.lyrics.pronunciation import PronunciationSegment
 
 
 def test_token_is_split_into_character_level_karaoke_chunks() -> None:
@@ -113,3 +114,49 @@ def test_k_tags_never_assign_negative_time_to_punctuation() -> None:
         ("，", 0),
     ]
     assert rendered == r"{\kf2}あ{\kf1}い，"
+
+
+def test_atomic_pronunciation_unit_changes_base_as_one_chunk() -> None:
+    effect_module = importlib.import_module("app.subtitle.karaoke_effect")
+    token = AlignedToken(
+        "80億分の1",
+        "にこから",
+        0,
+        1000,
+        1.0,
+        pronunciation_segments=[
+            PronunciationSegment(0, 6, "にこから", True)
+        ],
+    )
+
+    assert effect_module.character_chunks(token) == [
+        effect_module.KaraokeChunk("80億分の1", 100)
+    ]
+
+
+def test_safe_segments_follow_their_own_mora_timing() -> None:
+    effect_module = importlib.import_module("app.subtitle.karaoke_effect")
+    token = AlignedToken(
+        "泣き声",
+        "なきごえ",
+        0,
+        1000,
+        1.0,
+        moras=[
+            AlignedMora("な", 0, 100, True, 1.0),
+            AlignedMora("き", 100, 200, True, 1.0),
+            AlignedMora("ご", 200, 400, True, 1.0),
+            AlignedMora("え", 400, 1000, True, 1.0),
+        ],
+        pronunciation_segments=[
+            PronunciationSegment(0, 1, "な", True),
+            PronunciationSegment(1, 2, "き", False),
+            PronunciationSegment(2, 3, "ごえ", True),
+        ],
+    )
+
+    assert effect_module.character_chunks(token) == [
+        effect_module.KaraokeChunk("泣", 10),
+        effect_module.KaraokeChunk("き", 10),
+        effect_module.KaraokeChunk("声", 80),
+    ]

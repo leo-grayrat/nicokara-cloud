@@ -6,6 +6,7 @@ from app.alignment.models import (
     AlignedToken,
     LyricTimeline,
 )
+from app.lyrics.pronunciation import PronunciationSegment
 from app.subtitle.kirakara_generator import KirakaraAssConfig, KirakaraAssGenerator
 
 
@@ -123,6 +124,35 @@ def test_kirakara_generator_places_ruby_only_over_kanji_groups() -> None:
     assert len(ruby_events) == 3
     assert "".join(event[-1] for event in ruby_events) == "きょう"
     assert "きょうも" not in content
+
+
+def test_kirakara_generator_uses_atomic_pronunciation_mapping() -> None:
+    token = AlignedToken(
+        "80億分の1",
+        "にこから",
+        1000,
+        2000,
+        1.0,
+        pronunciation_segments=[
+            PronunciationSegment(0, 6, "にこから", True)
+        ],
+    )
+    timeline = LyricTimeline(
+        confidence=1.0,
+        lines=[lyric_line(token.surface, token.reading, 1000, 2000, [token])],
+    )
+
+    content = KirakaraAssGenerator().generate(timeline)
+    ruby_events = [
+        event for event in content.splitlines() if ",KirakaraRuby," in event
+    ]
+    progress_events = [
+        event for event in content.splitlines() if ",KirakaraProgress," in event
+    ]
+
+    assert "".join(event[-1] for event in ruby_events) == "にこから"
+    assert len(progress_events) == 1
+    assert progress_events[0].endswith("80億分の1")
 
 
 def test_kirakara_generator_keeps_mora_driven_karaoke_progress() -> None:

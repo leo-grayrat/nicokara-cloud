@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import re
 from collections.abc import Callable
 
-from app.alignment.models import AlignedLine
+from app.alignment.models import AlignedLine, AlignedToken
 from app.alignment.japanese import normalize_reading
 
 
@@ -14,6 +14,14 @@ class RubyPlacement:
     x: int
     y: int
     token_index: int
+
+
+@dataclass(frozen=True)
+class RubyReading:
+    surface_start: int
+    surface_end: int
+    reading: str
+    reading_start: int
 
 
 def contains_kanji(text: str) -> bool:
@@ -70,6 +78,46 @@ def kanji_readings(surface: str, reading: str) -> list[tuple[int, int, str]]:
     ]
 
 
+def token_ruby_readings(token: AlignedToken) -> list[RubyReading]:
+    if token.pronunciation_segments:
+        readings: list[RubyReading] = []
+        reading_start = 0
+        for segment in token.pronunciation_segments:
+            normalized = normalize_reading(segment.reading)
+            if segment.ruby:
+                readings.append(
+                    RubyReading(
+                        surface_start=segment.surface_start,
+                        surface_end=segment.surface_end,
+                        reading=normalized,
+                        reading_start=reading_start,
+                    )
+                )
+            reading_start += len(normalized)
+        return readings
+
+    result: list[RubyReading] = []
+    reading_cursor = 0
+    normalized_token_reading = normalize_reading(token.reading)
+    for surface_start, surface_end, reading in kanji_readings(
+        token.surface,
+        token.reading,
+    ):
+        reading_start = normalized_token_reading.find(reading, reading_cursor)
+        if reading_start < 0:
+            reading_start = reading_cursor
+        result.append(
+            RubyReading(
+                surface_start=surface_start,
+                surface_end=surface_end,
+                reading=reading,
+                reading_start=reading_start,
+            )
+        )
+        reading_cursor = reading_start + len(reading)
+    return result
+
+
 def ruby_placements(
     line: AlignedLine,
     *,
@@ -98,22 +146,28 @@ def ruby_placements(
     placements: list[RubyPlacement] = []
     character_offset = 0
     for token_index, token in enumerate(line.tokens):
-        for run_start, run_end, reading in kanji_readings(
-            token.surface,
-            token.reading,
-        ):
+        for ruby in token_ruby_readings(token):
             placements.append(
                 RubyPlacement(
-                    text=reading,
+                    text=ruby.reading,
                     x=round(
                         line_left
-                        + width(line.surface[:character_offset + run_start])
+                        + width(
+                            line.surface[
+                                : character_offset + ruby.surface_start
+                            ]
+                        )
                         + (
                             letter_spacing
-                            if character_offset + run_start > 0
+                            if character_offset + ruby.surface_start > 0
                             else 0
                         )
-                        + width(token.surface[run_start:run_end]) / 2
+                        + width(
+                            token.surface[
+                                ruby.surface_start : ruby.surface_end
+                            ]
+                        )
+                        / 2
                     ),
                     y=baseline_y - base_font_size // 2 - 2,
                     token_index=token_index,

@@ -9,6 +9,7 @@ from app.alignment.models import (
     AlignedToken,
     LyricTimeline,
 )
+from app.lyrics.pronunciation import PronunciationSegment
 
 
 class TimelineReviewError(ValueError):
@@ -42,6 +43,17 @@ def lyric_timeline_from_dict(value: dict[str, Any]) -> LyricTimeline:
                                 confidence=float(mora["confidence"]),
                             )
                             for mora in token.get("moras", [])
+                        ],
+                        pronunciation_segments=[
+                            PronunciationSegment(
+                                surface_start=int(segment["surface_start"]),
+                                surface_end=int(segment["surface_end"]),
+                                reading=str(segment["reading"]),
+                                ruby=bool(segment["ruby"]),
+                            )
+                            for segment in token.get(
+                                "pronunciation_segments", []
+                            )
                         ],
                     )
                     for token in line.get("tokens", [])
@@ -206,6 +218,9 @@ def apply_timeline_review(
                         reviewed_token.get("moras"),
                         line_index,
                         token_index,
+                    ),
+                    pronunciation_segments=(
+                        source_token.pronunciation_segments
                     ),
                 )
             )

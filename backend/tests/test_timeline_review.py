@@ -13,6 +13,7 @@ from app.alignment.review import (
     apply_timeline_review,
     lyric_timeline_from_dict,
 )
+from app.lyrics.pronunciation import PronunciationSegment
 
 
 def source_timeline() -> LyricTimeline:
@@ -197,6 +198,57 @@ def test_preserves_alignment_metadata_when_loading_and_reviewing() -> None:
 
     assert reviewed.alignment_engine == "fa_kara_mms"
     assert reviewed.alignment_model == "torchaudio.pipelines.MMS_FA"
+
+
+def test_preserves_pronunciation_segments_when_loading_and_reviewing() -> None:
+    segment = PronunciationSegment(0, 2, "きょう", True)
+    source = source_timeline()
+    token = source.lines[0].tokens[0]
+    source = LyricTimeline(
+        confidence=source.confidence,
+        lines=[
+            AlignedLine(
+                surface="今日",
+                reading="きょう",
+                start_ms=1000,
+                end_ms=2000,
+                confidence=1.0,
+                tokens=[
+                    AlignedToken(
+                        surface=token.surface,
+                        reading=token.reading,
+                        start_ms=token.start_ms,
+                        end_ms=token.end_ms,
+                        confidence=token.confidence,
+                        moras=token.moras,
+                        pronunciation_segments=[segment],
+                    )
+                ],
+            )
+        ],
+    )
+
+    loaded = lyric_timeline_from_dict(source.to_dict())
+    reviewed = apply_timeline_review(
+        loaded,
+        {
+            "lines": [
+                {
+                    "start_ms": 1000,
+                    "end_ms": 2000,
+                    "tokens": [
+                        {
+                            "reading": "きょう",
+                            "start_ms": 1000,
+                            "end_ms": 2000,
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    assert reviewed.lines[0].tokens[0].pronunciation_segments == [segment]
 
 
 def test_rejects_review_with_a_different_timeline_shape() -> None:

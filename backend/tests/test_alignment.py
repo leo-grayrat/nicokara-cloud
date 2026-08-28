@@ -10,6 +10,7 @@ from app.ai.whisper import (
     TranscriptWord,
 )
 from app.lyrics.models import LyricDocument, LyricLine, LyricToken
+from app.lyrics.pronunciation import PronunciationSegment
 
 
 def exact_lyrics() -> LyricDocument:
@@ -94,6 +95,51 @@ def test_exact_mora_match_preserves_whisper_word_boundaries() -> None:
         "り",
     ]
     assert all(mora.matched for mora in timeline.lines[0].tokens[0].moras)
+
+
+def test_whisper_aligner_preserves_pronunciation_segments() -> None:
+    segment = PronunciationSegment(0, 2, "ものがたり", True)
+    lyrics = LyricDocument(
+        provider="local",
+        source_text="物語",
+        lines=[
+            LyricLine(
+                source="物語",
+                surface="物語",
+                reading="ものがたり",
+                tokens=[
+                    LyricToken(
+                        "物語",
+                        "ものがたり",
+                        pronunciation_segments=[segment],
+                    )
+                ],
+            )
+        ],
+    )
+    transcript = TranscriptDocument(
+        language="ja",
+        language_probability=1.0,
+        duration_seconds=3.0,
+        text="ものがたり",
+        segments=[
+            TranscriptSegment(
+                id=0,
+                text="ものがたり",
+                start_ms=1000,
+                end_ms=2500,
+                confidence=1.0,
+                no_speech_probability=0.0,
+                words=[TranscriptWord("ものがたり", 1000, 2500, 1.0)],
+            )
+        ],
+    )
+
+    timeline = importlib.import_module(
+        "app.alignment.aligner"
+    ).LyricTimelineAligner().align(lyrics, transcript)
+
+    assert timeline.lines[0].tokens[0].pronunciation_segments == [segment]
 
 
 def test_missing_asr_mora_is_interpolated_between_matches() -> None:
