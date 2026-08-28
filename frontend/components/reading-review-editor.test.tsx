@@ -1,203 +1,141 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { ReadingReviewEditor } from "./reading-review-editor";
+import type { ProcessedLyrics } from "@/types/job";
+import {
+  buildReadingCorrections,
+  ReadingReviewEditor,
+} from "./reading-review-editor";
+
+const lyrics: ProcessedLyrics = {
+  provider: "local",
+  source_text: "泣き声と強い意志",
+  warnings: [],
+  lines: [
+    {
+      source: "泣き声と強い意志",
+      surface: "泣き声と強い意志",
+      reading: "なきこえとつよいいし",
+      tokens: [
+        { surface: "泣", reading: "な" },
+        { surface: "き", reading: "き" },
+        { surface: "声", reading: "こえ" },
+        { surface: "と", reading: "と" },
+        { surface: "強", reading: "つよ" },
+        { surface: "い", reading: "い" },
+        { surface: "意", reading: "い" },
+        { surface: "志", reading: "し" },
+      ],
+      review_units: [
+        { start_token: 0, end_token: 3, surface: "泣き声", reading: "なきこえ" },
+        { start_token: 4, end_token: 6, surface: "強い", reading: "つよい" },
+        { start_token: 6, end_token: 8, surface: "意志", reading: "いし" },
+      ],
+    },
+  ],
+};
 
 describe("ReadingReviewEditor", () => {
-  it("shows only tokens whose readings require human judgment", () => {
+  it("renders server review units instead of internal tokens", () => {
     const html = renderToStaticMarkup(
-      <ReadingReviewEditor
-        lyrics={{
-          provider: "local",
-          source_text: "君は",
-          warnings: [],
-          lines: [
-            {
-              source: "君は",
-              surface: "君は",
-              reading: "くんは",
-              tokens: [
-                { surface: "君", reading: "くん" },
-                { surface: "は", reading: "は", alignment_pronunciation: "wa" },
-              ],
-            },
-          ],
-        }}
-        submitting={false}
-        onChange={vi.fn()}
-        onConfirm={vi.fn()}
-      />,
+      <ReadingReviewEditor lyrics={lyrics} submitting={false} onConfirm={vi.fn()} />,
     );
 
-    expect(html).toContain("确认假名注音");
-    expect(html).toContain("君は");
-    expect(html).toContain('value="くん"');
-    expect(html).not.toContain('value="は"');
-    expect(html.match(/<input/g)).toHaveLength(1);
-    expect(html).toContain("保存注音并开始对齐");
-    expect(html).not.toContain("设置时间轴");
+    expect(html).toContain('aria-label="泣き声 假名读音"');
+    expect(html).toContain('aria-label="強い 假名读音"');
+    expect(html).toContain('aria-label="意志 假名读音"');
+    expect(html).not.toContain('aria-label="き 假名读音"');
+    expect(html.match(/<input/g)).toHaveLength(3);
   });
 
-  it("does not render kana, punctuation, or whitespace as review fields", () => {
+  it("omits kana-only lines when the server has no review units", () => {
     const html = renderToStaticMarkup(
       <ReadingReviewEditor
         lyrics={{
           provider: "local",
-          source_text: "君 は。",
+          source_text: "きっと、またね",
           warnings: [],
-          lines: [
-            {
-              source: "君 は。",
-              surface: "君 は。",
-              reading: "きみ は。",
-              tokens: [
-                { surface: "君", reading: "きみ" },
-                { surface: " ", reading: " " },
-                { surface: "は", reading: "は" },
-                { surface: "。", reading: "。" },
-              ],
-            },
-          ],
+          lines: [{
+            source: "きっと、またね",
+            surface: "きっと、またね",
+            reading: "きっと、またね",
+            tokens: [
+              { surface: "きっと", reading: "きっと" },
+              { surface: "、", reading: "、" },
+              { surface: "またね", reading: "またね" },
+            ],
+            review_units: [],
+          }],
         }}
         submitting={false}
-        onChange={vi.fn()}
-        onConfirm={vi.fn()}
-      />,
-    );
-
-    expect(html.match(/<input/g)).toHaveLength(1);
-    expect(html).not.toContain('aria-label="空格，无需注音"');
-    expect(html).not.toContain('value="は"');
-    expect(html).not.toContain('value="。"');
-    expect(html).not.toContain('<button type="button" disabled=""');
-  });
-
-  it("omits all-kana lines and explains when nothing needs review", () => {
-    const html = renderToStaticMarkup(
-      <ReadingReviewEditor
-        lyrics={{
-          provider: "local",
-          source_text: "きっと、またね\nキラキラ",
-          warnings: [],
-          lines: [
-            {
-              source: "きっと、またね",
-              surface: "きっと、またね",
-              reading: "きっと、またね",
-              tokens: [
-                { surface: "きっと", reading: "きっと" },
-                { surface: "、", reading: "、" },
-                { surface: "またね", reading: "またね" },
-              ],
-            },
-            {
-              source: "キラキラ",
-              surface: "キラキラ",
-              reading: "きらきら",
-              tokens: [{ surface: "キラキラ", reading: "きらきら" }],
-            },
-          ],
-        }}
-        submitting={false}
-        onChange={vi.fn()}
         onConfirm={vi.fn()}
       />,
     );
 
     expect(html).toContain("没有需要人工确认的注音");
-    expect(html).not.toContain("1. きっと、またね");
-    expect(html).not.toContain("2. キラキラ");
     expect(html).not.toContain("<input");
-    expect(html).toContain("保存注音并开始对齐");
   });
 
-  it("warns when a foreign word still has an unconverted reading", () => {
+  it("keeps the foreign-reading warning on server review units", () => {
     const html = renderToStaticMarkup(
       <ReadingReviewEditor
         lyrics={{
           provider: "local",
-          source_text: "LOVEを歌う",
+          source_text: "80億分の1 LOVE",
           warnings: [],
-          lines: [
-            {
-              source: "LOVEを歌う",
-              surface: "LOVEを歌う",
-              reading: "LOVEをうたう",
-              tokens: [
-                { surface: "LOVE", reading: "LOVE" },
-                { surface: "を", reading: "を" },
-                { surface: "歌", reading: "うた" },
-                { surface: "う", reading: "う" },
-              ],
-            },
-          ],
+          lines: [{
+            source: "80億分の1 LOVE",
+            surface: "80億分の1 LOVE",
+            reading: "80億分の1 LOVE",
+            tokens: [
+              { surface: "80億分の1", reading: "80億分の1" },
+              { surface: " ", reading: " " },
+              { surface: "LOVE", reading: "LOVE" },
+            ],
+            review_units: [
+              {
+                start_token: 0,
+                end_token: 1,
+                surface: "80億分の1",
+                reading: "80億分の1",
+              },
+              {
+                start_token: 2,
+                end_token: 3,
+                surface: "LOVE",
+                reading: "LOVE",
+              },
+            ],
+          }],
         }}
         submitting={false}
-        onChange={vi.fn()}
         onConfirm={vi.fn()}
       />,
     );
 
-    expect(html).toContain('role="alert"');
-    expect(html).toContain("请确认将外来语注音为假名");
-    expect(html).toContain('aria-invalid="true"');
-    expect(html).toContain("LOVE → らぶ");
+    expect(html).toContain("检测到 2 处英文或数字");
+    expect(html.match(/aria-invalid="true"/g)).toHaveLength(2);
+  });
+});
+
+describe("buildReadingCorrections", () => {
+  it("submits only the review unit whose reading changed", () => {
+    expect(buildReadingCorrections(lyrics, { "0:0:3": "なきごえ" })).toEqual({
+      corrections: [{
+        line_index: 0,
+        start_token: 0,
+        end_token: 3,
+        surface: "泣き声",
+        current_reading: "なきこえ",
+        corrected_reading: "なきごえ",
+      }],
+    });
   });
 
-  it("asks for confirmation when a foreign word has generated kana", () => {
-    const html = renderToStaticMarkup(
-      <ReadingReviewEditor
-        lyrics={{
-          provider: "local",
-          source_text: "LOVEを歌う",
-          warnings: ["local_reading_may_be_inaccurate"],
-          lines: [
-            {
-              source: "LOVEを歌う",
-              surface: "LOVEを歌う",
-              reading: "らぶをうたう",
-              tokens: [
-                { surface: "LOVE", reading: "らぶ" },
-                { surface: "を", reading: "を" },
-                { surface: "歌", reading: "うた" },
-                { surface: "う", reading: "う" },
-              ],
-            },
-          ],
-        }}
-        submitting={false}
-        onChange={vi.fn()}
-        onConfirm={vi.fn()}
-      />,
-    );
-
-    expect(html).toContain("请确认将外来语注音为假名");
-    expect(html).toContain("系统已提供默认读音");
-  });
-
-  it("allows confirmation when a generated reading is left empty", () => {
-    const html = renderToStaticMarkup(
-      <ReadingReviewEditor
-        lyrics={{
-          provider: "local",
-          source_text: "君",
-          warnings: [],
-          lines: [
-            {
-              source: "君",
-              surface: "君",
-              reading: "",
-              tokens: [{ surface: "君", reading: "" }],
-            },
-          ],
-        }}
-        submitting={false}
-        onChange={vi.fn()}
-        onConfirm={vi.fn()}
-      />,
-    );
-
-    expect(html).toContain("留空将沿用系统生成的读音");
-    expect(html).not.toContain('<button type="button" disabled=""');
+  it("omits unchanged and blank edits", () => {
+    expect(buildReadingCorrections(lyrics, {
+      "0:0:3": "なきこえ",
+      "0:4:6": "   ",
+    })).toEqual({ corrections: [] });
   });
 });

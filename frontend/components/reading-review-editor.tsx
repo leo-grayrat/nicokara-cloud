@@ -1,18 +1,25 @@
 "use client";
 
 import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
+import { useState } from "react";
 
-import type { ProcessedLyrics } from "@/types/job";
+import type {
+  ProcessedLyrics,
+  ReadingReviewPayload,
+} from "@/types/job";
 
 const LATIN_OR_DIGIT = /[A-Za-z0-9]/;
-const KANJI_LATIN_OR_DIGIT = /[\p{Script=Han}A-Za-z0-9]/u;
+
+function reviewKey(
+  lineIndex: number,
+  startToken: number,
+  endToken: number,
+) {
+  return `${lineIndex}:${startToken}:${endToken}`;
+}
 
 function isForeignSurface(surface: string) {
   return LATIN_OR_DIGIT.test(surface);
-}
-
-function requiresReadingReview(surface: string) {
-  return KANJI_LATIN_OR_DIGIT.test(surface);
 }
 
 function hasUnconvertedForeignReading(surface: string, reading: string) {
@@ -20,55 +27,54 @@ function hasUnconvertedForeignReading(surface: string, reading: string) {
     && (reading.trim().length === 0 || LATIN_OR_DIGIT.test(reading));
 }
 
+export function buildReadingCorrections(
+  lyrics: ProcessedLyrics,
+  editedReadings: Record<string, string>,
+): ReadingReviewPayload {
+  const corrections = lyrics.lines.flatMap((line, lineIndex) =>
+    line.review_units.flatMap((unit) => {
+      const edited = editedReadings[
+        reviewKey(lineIndex, unit.start_token, unit.end_token)
+      ];
+      const corrected = edited?.trim();
+      if (!corrected || corrected === unit.reading) return [];
+      return [{
+        line_index: lineIndex,
+        start_token: unit.start_token,
+        end_token: unit.end_token,
+        surface: unit.surface,
+        current_reading: unit.reading,
+        corrected_reading: corrected,
+      }];
+    }),
+  );
+  return { corrections };
+}
+
 export function ReadingReviewEditor({
   lyrics,
   submitting,
-  onChange,
   onConfirm,
 }: {
   lyrics: ProcessedLyrics;
   submitting: boolean;
-  onChange: (lyrics: ProcessedLyrics) => void;
-  onConfirm: () => void;
+  onConfirm: (review: ReadingReviewPayload) => void;
 }) {
-  const valid = lyrics.lines.length > 0 && lyrics.lines.every(
-    (line) => line.tokens.length > 0,
+  const [editedReadings, setEditedReadings] = useState<Record<string, string>>(
+    {},
   );
-  const foreignReadingCount = lyrics.lines.reduce(
-    (count, line) => count + line.tokens.filter(
-      (token) => isForeignSurface(token.surface),
-    ).length,
-    0,
-  );
+  const valid = lyrics.lines.length > 0;
   const reviewLines = lyrics.lines.map((line, lineIndex) => ({
     line,
     lineIndex,
-    tokens: line.tokens.map((token, tokenIndex) => ({
-      token,
-      tokenIndex,
-    })).filter(({ token }) => requiresReadingReview(token.surface)),
-  })).filter(({ tokens }) => tokens.length > 0);
-
-  function updateReading(
-    lineIndex: number,
-    tokenIndex: number,
-    reading: string,
-  ) {
-    const lines = lyrics.lines.map((line, candidateLineIndex) => {
-      if (candidateLineIndex !== lineIndex) return line;
-      const tokens = line.tokens.map((token, candidateTokenIndex) =>
-        candidateTokenIndex === tokenIndex
-          ? { ...token, reading }
-          : token,
-      );
-      return {
-        ...line,
-        reading: tokens.map((token) => token.reading).join(""),
-        tokens,
-      };
-    });
-    onChange({ ...lyrics, lines });
-  }
+    units: line.review_units,
+  })).filter(({ units }) => units.length > 0);
+  const foreignReadingCount = reviewLines.reduce(
+    (count, { units }) => count + units.filter(
+      (unit) => isForeignSurface(unit.surface),
+    ).length,
+    0,
+  );
 
   return (
     <section className="mt-6 border-t pt-6" aria-labelledby="reading-review-heading">
@@ -99,23 +105,27 @@ export function ReadingReviewEditor({
         </p>
       ) : (
         <div className="mt-4 max-h-[34rem] divide-y overflow-y-auto overscroll-contain border-y [scrollbar-gutter:stable]">
-          {reviewLines.map(({ line, lineIndex, tokens }) => (
+          {reviewLines.map(({ line, lineIndex, units }) => (
             <section key={`${lineIndex}-${line.surface}`} className="py-4">
               <h3 className="break-all text-sm font-bold">
                 {lineIndex + 1}. {line.surface}
               </h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {tokens.map(({ token, tokenIndex }) => {
-                  const requiresKanaConfirmation = isForeignSurface(
-                    token.surface,
+                {units.map((unit) => {
+                  const key = reviewKey(
+                    lineIndex,
+                    unit.start_token,
+                    unit.end_token,
                   );
+                  const reading = editedReadings[key] ?? unit.reading;
+                  const requiresKanaConfirmation = isForeignSurface(unit.surface);
                   const hasInvalidKana = hasUnconvertedForeignReading(
-                    token.surface,
-                    token.reading,
+                    unit.surface,
+                    reading,
                   );
                   return (
                     <label
-                      key={`${tokenIndex}-${token.surface}`}
+                      key={key}
                       className={`min-w-0 text-xs font-medium ${
                         requiresKanaConfirmation
                           ? "rounded-md border border-amber-500/70 bg-amber-50 p-2 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
@@ -123,19 +133,18 @@ export function ReadingReviewEditor({
                       }`}
                     >
                       <span className="block break-all text-sm font-semibold text-foreground">
-                        {token.surface}
+                        {unit.surface}
                       </span>
-                      <span className="sr-only">假名读音</span>
                       <input
                         type="text"
-                        value={token.reading}
+                        value={reading}
+                        aria-label={`${unit.surface} 假名读音`}
                         aria-invalid={hasInvalidKana || undefined}
                         disabled={submitting}
-                        onChange={(event) => updateReading(
-                          lineIndex,
-                          tokenIndex,
-                          event.target.value,
-                        )}
+                        onChange={(event) => setEditedReadings((current) => ({
+                          ...current,
+                          [key]: event.target.value,
+                        }))}
                         className={`focus-ring mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-60 ${
                           requiresKanaConfirmation
                             ? "border-amber-600 ring-2 ring-amber-400/50"
@@ -153,7 +162,7 @@ export function ReadingReviewEditor({
       <button
         type="button"
         disabled={!valid || submitting}
-        onClick={onConfirm}
+        onClick={() => onConfirm(buildReadingCorrections(lyrics, editedReadings))}
         className="focus-ring mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
       >
         {submitting ? (

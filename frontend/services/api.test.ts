@@ -933,7 +933,7 @@ describe("submitCloudRender", () => {
 });
 
 describe("confirmReadings", () => {
-  it("saves token readings before queueing alignment", async () => {
+  it("sends only changed review units before queueing alignment", async () => {
     const queued = {
       id: "job-1",
       status: "UPLOADED",
@@ -949,10 +949,14 @@ describe("confirmReadings", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { confirmReadings } = await import("./api");
     const review = {
-      lines: [
+      corrections: [
         {
+          line_index: 0,
+          start_token: 0,
+          end_token: 1,
           surface: "君",
-          tokens: [{ surface: "君", reading: "きみ" }],
+          current_reading: "くん",
+          corrected_reading: "きみ",
         },
       ],
     };
