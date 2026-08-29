@@ -26,11 +26,20 @@ export type ProcessedLyricToken = {
   alignment_pronunciation?: string | null;
 };
 
+export type ProcessedReadingReviewUnit = {
+  start_token: number;
+  end_token: number;
+  surface: string;
+  reading: string;
+  pronunciation_segments?: ProcessedPronunciationSegment[];
+};
+
 export type ProcessedLyricLine = {
   source: string;
   surface: string;
   reading: string;
   tokens: ProcessedLyricToken[];
+  review_units: ProcessedReadingReviewUnit[];
 };
 
 export type ProcessedLyrics = {
@@ -40,10 +49,16 @@ export type ProcessedLyrics = {
   warnings: string[];
 };
 
+export type ReadingCorrection = {
+  line_index: number;
+  start_token: number;
+  end_token: number;
+  surface: string;
+  current_reading: string;
+  corrected_reading: string;
+};
+
 export type ReadingReviewPayload = {
-  lines: Array<{
-    surface: string;
-    tokens: Array<{ surface: string; reading: string }>;
-  }>;
+  corrections: ReadingCorrection[];
 };
 

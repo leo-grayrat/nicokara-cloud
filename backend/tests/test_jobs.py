@@ -298,6 +298,14 @@ def test_processed_lyrics_can_be_downloaded(tmp_path: Path) -> None:
             "end_token": 1,
             "surface": "物語",
             "reading": "ものがたり",
+            "pronunciation_segments": [
+                    {
+                        "surface_start": 0,
+                        "surface_end": 2,
+                        "reading": "ものがたり",
+                        "ruby": True,
+                }
+            ],
         }
     ]
     assert json.loads(lyrics_path.read_text(encoding="utf-8")) == processed

@@ -45,8 +45,11 @@ import {
   timelineUrl,
   transcriptUrl,
 } from "@/services/api";
-import type { Job } from "@/types/job";
-import type { ProcessedLyrics } from "@/types/job";
+import type {
+  Job,
+  ProcessedLyrics,
+  ReadingReviewPayload,
+} from "@/types/job";
 
 export function JobStatus({ jobId }: { jobId: string }) {
   const [job, setJob] = useState<Job | null>(null);
@@ -202,22 +205,12 @@ export function JobStatus({ jobId }: { jobId: string }) {
     }
   }
 
-  async function handleConfirmReadings() {
+  async function handleConfirmReadings(review: ReadingReviewPayload) {
     if (!processedLyrics) return;
     setSubmittingReadings(true);
     setRequestError(null);
     try {
-      const queued = await confirmReadings(job.id, {
-        lines: processedLyrics.lines.map((line) => ({
-          surface: line.surface,
-          tokens: line.tokens.map((token) => ({
-            surface: token.surface,
-            reading: token.surface.trim().length === 0
-              ? token.reading
-              : token.reading.trim(),
-          })),
-        })),
-      });
+      const queued = await confirmReadings(job.id, review);
       setJob(queued);
       setProcessedLyrics(null);
       setRefreshKey((value) => value + 1);
@@ -375,7 +368,6 @@ export function JobStatus({ jobId }: { jobId: string }) {
           <ReadingReviewEditor
             lyrics={processedLyrics}
             submitting={submittingReadings}
-            onChange={setProcessedLyrics}
             onConfirm={handleConfirmReadings}
           />
         )}

@@ -187,6 +187,26 @@ def test_review_payload_adds_units_without_replacing_internal_tokens() -> None:
             "end_token": 3,
             "surface": "泣き声",
             "reading": "なきごえ",
+            "pronunciation_segments": [
+                {
+                    "surface_start": 0,
+                    "surface_end": 1,
+                    "reading": "な",
+                    "ruby": True,
+                },
+                {
+                    "surface_start": 1,
+                    "surface_end": 2,
+                    "reading": "き",
+                    "ruby": False,
+                },
+                {
+                    "surface_start": 2,
+                    "surface_end": 3,
+                    "reading": "ごえ",
+                    "ruby": True,
+                },
+            ],
         }
     ]
 
@@ -310,6 +330,40 @@ def test_unmappable_correction_is_kept_as_one_atomic_unit() -> None:
             ],
         )
     ]
+
+
+def test_correction_cannot_change_literal_kana_inside_review_unit() -> None:
+    document = LyricDocument(
+        provider="local",
+        source_text="泣き声",
+        lines=[
+            LyricLine(
+                source="泣き声",
+                surface="泣き声",
+                reading="なきこえ",
+                tokens=[
+                    LyricToken("泣", "な"),
+                    LyricToken("き", "き"),
+                    LyricToken("声", "こえ"),
+                ],
+            )
+        ],
+    )
+
+    with pytest.raises(ReadingReviewError, match="字面假名"):
+        apply_reading_corrections(
+            document,
+            [
+                ReadingCorrection(
+                    line_index=0,
+                    start_token=0,
+                    end_token=3,
+                    surface="泣き声",
+                    current_reading="なきこえ",
+                    corrected_reading="なくごえ",
+                )
+            ],
+        )
 
 
 def test_accepting_defaults_preserves_protected_pronunciation() -> None:

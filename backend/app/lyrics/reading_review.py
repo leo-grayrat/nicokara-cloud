@@ -7,10 +7,11 @@ from typing import Any, Iterable
 from janome.tokenizer import Tokenizer
 
 from app.lyrics.models import LyricDocument, LyricLine, LyricToken
-from app.lyrics.pronunciation import pronunciation_segments
+from app.lyrics.pronunciation import PronunciationSegment, pronunciation_segments
 
 
 _REVIEWABLE_SURFACE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaffA-Za-z0-9]")
+_FLEXIBLE_READING_SURFACE = re.compile(r"[A-Za-z0-9０-９]")
 _VALID_CORRECTED_READING = re.compile(
     r"[\u3040-\u30ff\u31f0-\u31ffーゝゞヽヾ・]+"
 )
@@ -33,6 +34,7 @@ class ReadingReviewUnit:
     end_token: int
     surface: str
     reading: str
+    pronunciation_segments: list[PronunciationSegment]
 
 
 @dataclass(frozen=True)
@@ -131,6 +133,10 @@ def _fallback_units(
             end_token=index + 1,
             surface=token.surface,
             reading=token.reading,
+            pronunciation_segments=pronunciation_segments(
+                token.surface,
+                token.reading,
+            ),
         )
         for index, token in enumerate(line.tokens)
         if token.alignment_pronunciation is None
@@ -188,6 +194,10 @@ def line_review_units(line: LyricLine) -> list[ReadingReviewUnit]:
                     end_token=range_end,
                     surface=surface,
                     reading="".join(token.reading for token in selected),
+                    pronunciation_segments=pronunciation_segments(
+                        surface,
+                        "".join(token.reading for token in selected),
+                    ),
                 )
             )
             used_tokens.update(token_indexes)
@@ -258,6 +268,24 @@ def _validate_corrections(
             raise ReadingReviewError("当前读音与审核单位不一致")
         if _VALID_CORRECTED_READING.fullmatch(correction.corrected_reading) is None:
             raise ReadingReviewError("修正读音必须是非空假名")
+        original_literals = [
+            segment
+            for segment in unit.pronunciation_segments
+            if not segment.ruby
+        ]
+        corrected_literals = [
+            segment
+            for segment in pronunciation_segments(
+                unit.surface,
+                correction.corrected_reading,
+            )
+            if not segment.ruby
+        ]
+        if (
+            _FLEXIBLE_READING_SURFACE.search(unit.surface) is None
+            and corrected_literals != original_literals
+        ):
+            raise ReadingReviewError("修正读音不能改变歌词中的字面假名")
 
         validated[
             (
