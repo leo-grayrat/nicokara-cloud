@@ -92,6 +92,94 @@ const cloudTimeline: CloudLyricTimeline = {
 };
 
 describe("toKirakaraTimeline", () => {
+  it("uses explicit pronunciation segments for mixed-surface ruby", () => {
+    const source: CloudLyricTimeline = {
+      confidence: 1,
+      warnings: [],
+      lines: [
+        line("泣き声", "なきごえ", 1_000, 2_000, [
+          {
+            surface: "泣き声",
+            reading: "なきごえ",
+            start_ms: 1_000,
+            end_ms: 2_000,
+            confidence: 1,
+            moras: [
+              { reading: "な", start_ms: 1_000, end_ms: 1_200, matched: true, confidence: 1 },
+              { reading: "き", start_ms: 1_200, end_ms: 1_400, matched: true, confidence: 1 },
+              { reading: "ご", start_ms: 1_400, end_ms: 1_700, matched: true, confidence: 1 },
+              { reading: "え", start_ms: 1_700, end_ms: 2_000, matched: true, confidence: 1 },
+            ],
+            pronunciation_segments: [
+              { surface_start: 0, surface_end: 1, reading: "な", ruby: true },
+              { surface_start: 1, surface_end: 2, reading: "き", ruby: false },
+              { surface_start: 2, surface_end: 3, reading: "ごえ", ruby: true },
+            ],
+          },
+        ]),
+      ],
+    };
+
+    expect(toKirakaraTimeline(source).lines[0].units[0].ruby).toEqual([
+      { text: "な", startCharacter: 0, endCharacter: 1, readingStart: 0 },
+      { text: "ごえ", startCharacter: 2, endCharacter: 3, readingStart: 2 },
+    ]);
+  });
+
+  it("keeps an atomic pronunciation as one base progress unit", () => {
+    const source: CloudLyricTimeline = {
+      confidence: 1,
+      warnings: [],
+      lines: [
+        line("80億分の1", "にこから", 1_000, 2_000, [
+          {
+            surface: "80億分の1",
+            reading: "にこから",
+            start_ms: 1_000,
+            end_ms: 2_000,
+            confidence: 1,
+            moras: [
+              { reading: "に", start_ms: 1_000, end_ms: 1_250, matched: true, confidence: 1 },
+              { reading: "こ", start_ms: 1_250, end_ms: 1_500, matched: true, confidence: 1 },
+              { reading: "か", start_ms: 1_500, end_ms: 1_750, matched: true, confidence: 1 },
+              { reading: "ら", start_ms: 1_750, end_ms: 2_000, matched: true, confidence: 1 },
+            ],
+            pronunciation_segments: [
+              {
+                surface_start: 0,
+                surface_end: 6,
+                reading: "にこから",
+                ruby: true,
+              },
+            ],
+          },
+        ]),
+      ],
+    };
+
+    const timeline = toKirakaraTimeline(source);
+    expect(timeline.lines[0].units[0].ruby).toEqual([
+      {
+        text: "にこから",
+        startCharacter: 0,
+        endCharacter: 6,
+        readingStart: 0,
+      },
+    ]);
+    expect(activeKirakaraFrame(timeline, 1_500)?.lines[0].units[0]).toMatchObject({
+      progress: 0.5,
+      characters: [{ text: "80億分の1", progress: 0.5 }],
+      ruby: [{
+        characters: [
+          { text: "に", progress: 1 },
+          { text: "こ", progress: 1 },
+          { text: "か", progress: 0 },
+          { text: "ら", progress: 0 },
+        ],
+      }],
+    });
+  });
+
   it("isolates ruby to kanji runs inside mixed kana tokens", () => {
     expect(kanjiRuby("お願い", "おねがい")).toEqual([
       { text: "ねが", startCharacter: 1, endCharacter: 2 },

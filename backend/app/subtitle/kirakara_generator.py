@@ -13,7 +13,7 @@ from app.subtitle.karaoke_effect import (
     ruby_start_ms,
 )
 from app.subtitle.font_metrics import text_ink_measurer, text_measurer
-from app.subtitle.ruby import kanji_readings
+from app.subtitle.ruby import token_ruby_readings
 
 
 _UNSAFE_FONT_NAME = re.compile(r"[,;\r\n{}\[\]'\"]")
@@ -34,6 +34,7 @@ class _RubyLayout:
     character_ink: tuple[tuple[float, float], ...]
     y: int
     token_index: int
+    reading_start: int
 
 
 @dataclass(frozen=True)
@@ -353,7 +354,7 @@ class KirakaraAssGenerator:
             self.config.ruby_font_size,
         )
 
-        ruby_runs: dict[int, tuple[int, str, int]] = {}
+        ruby_runs: dict[int, tuple[int, str, int, int]] = {}
         token_offset = 0
         for token_index, token in enumerate(line.tokens):
             if not line.surface.startswith(token.surface, token_offset):
@@ -361,33 +362,45 @@ class KirakaraAssGenerator:
                 if found_at < 0:
                     continue
                 token_offset = found_at
-            for run_start, run_end, reading in kanji_readings(
-                token.surface,
-                token.reading,
-            ):
-                if reading:
-                    ruby_runs[token_offset + run_start] = (
-                        token_offset + run_end,
-                        reading,
+            for ruby in token_ruby_readings(token):
+                if ruby.reading:
+                    ruby_runs[token_offset + ruby.surface_start] = (
+                        token_offset + ruby.surface_end,
+                        ruby.reading,
                         token_index,
+                        ruby.reading_start,
                     )
             token_offset += len(token.surface)
 
-        groups: list[tuple[int, int, str | None, int | None]] = []
+        groups: list[
+            tuple[int, int, str | None, int | None, int | None]
+        ] = []
         character_index = 0
         while character_index < len(line.surface):
             ruby_run = ruby_runs.get(character_index)
             if ruby_run is not None and ruby_run[0] <= len(line.surface):
-                end, reading, token_index = ruby_run
-                groups.append((character_index, end, reading, token_index))
+                end, reading, token_index, reading_start = ruby_run
+                groups.append(
+                    (
+                        character_index,
+                        end,
+                        reading,
+                        token_index,
+                        reading_start,
+                    )
+                )
                 character_index = end
                 continue
-            groups.append((character_index, character_index + 1, None, None))
+            groups.append(
+                (character_index, character_index + 1, None, None, None)
+            )
             character_index += 1
 
-        group_layouts: list[tuple[str, str | None, int | None, float, float]] = []
+        group_layouts: list[
+            tuple[str, str | None, int | None, int | None, float, float]
+        ] = []
         total_width = 0.0
-        for start, end, reading, token_index in groups:
+        for start, end, reading, token_index, reading_start in groups:
             surface = line.surface[start:end]
             base_width = self._text_width(
                 surface,
@@ -405,7 +418,14 @@ class KirakaraAssGenerator:
             )
             effective_width = max(base_width, ruby_width)
             group_layouts.append(
-                (surface, reading, token_index, base_width, effective_width)
+                (
+                    surface,
+                    reading,
+                    token_index,
+                    reading_start,
+                    base_width,
+                    effective_width,
+                )
             )
             total_width += effective_width
         total_width += max(0, len(group_layouts) - 1) * self.config.base_letter_spacing
@@ -422,7 +442,14 @@ class KirakaraAssGenerator:
             - self.config.ruby_font_size
             - self.config.ruby_offset
         )
-        for surface, reading, token_index, base_width, effective_width in group_layouts:
+        for (
+            surface,
+            reading,
+            token_index,
+            reading_start,
+            base_width,
+            effective_width,
+        ) in group_layouts:
             main_cursor = cursor + (effective_width - base_width) / 2
             for character in surface:
                 ink_left, ink_right = base_ink_measure(character)
@@ -456,6 +483,7 @@ class KirakaraAssGenerator:
                         character_ink=tuple(ruby_character_ink),
                         y=ruby_y,
                         token_index=token_index,
+                        reading_start=reading_start or 0,
                     )
                 )
             cursor += effective_width + self.config.base_letter_spacing
@@ -611,10 +639,18 @@ class KirakaraAssGenerator:
         events: list[str] = []
         for ruby in layout.ruby:
             token = line.tokens[ruby.token_index]
-            chunks = ruby_chunks(token, ruby.text)
+            chunks = ruby_chunks(
+                token,
+                ruby.text,
+                reading_start=ruby.reading_start,
+            )
             if len(chunks) != len(ruby.character_x):
                 continue
-            current_ms = ruby_start_ms(token, ruby.text)
+            current_ms = ruby_start_ms(
+                token,
+                ruby.text,
+                reading_start=ruby.reading_start,
+            )
             for chunk, x, (ink_left, ink_right) in zip(
                 chunks,
                 ruby.character_x,
@@ -669,18 +705,47 @@ class KirakaraAssGenerator:
         fade_out: bool,
     ) -> list[str]:
         chunks = line_chunks(line)
-        if (
-            len(chunks) != len(layout.characters)
-            or "".join(chunk.text for chunk in chunks) != line.surface
-        ):
+        if "".join(chunk.text for chunk in chunks) != line.surface:
             chunks = self._uniform_line_chunks(line)
+
+        progress_layouts: list[_CharacterLayout] = []
+        character_offset = 0
+        for chunk in chunks:
+            character_count = len(chunk.text)
+            selected = layout.characters[
+                character_offset : character_offset + character_count
+            ]
+            if (
+                not selected
+                or "".join(character.text for character in selected)
+                != chunk.text
+            ):
+                chunks = self._uniform_line_chunks(line)
+                progress_layouts = list(layout.characters)
+                break
+            first = selected[0]
+            last = selected[-1]
+            progress_layouts.append(
+                _CharacterLayout(
+                    text=chunk.text,
+                    x=first.x,
+                    ink_left=first.ink_left,
+                    ink_right=last.x - first.x + last.ink_right,
+                )
+            )
+            character_offset += character_count
 
         events: list[str] = []
         current_ms = line.start_ms
-        for chunk, character in zip(chunks, layout.characters, strict=True):
+        for chunk, character in zip(chunks, progress_layouts, strict=True):
             duration_ms = max(0, chunk.duration_cs * 10)
             character_end_ms = current_ms + duration_ms
             if duration_ms > 0 and is_sung_text(chunk.text):
+                spacing = (
+                    rf"\fsp{self.config.base_letter_spacing}"
+                    if len(chunk.text) > 1
+                    else ""
+                )
                 events.append(
                     self._dialogue(
                         3,
@@ -694,7 +759,8 @@ class KirakaraAssGenerator:
                             ink_left=character.ink_left,
                             ink_right=character.ink_right,
                             stroke_width=self.config.outline_width,
-                        ),
+                        )
+                        + spacing,
                         escape_ass_text(chunk.text),
                     )
                 )
@@ -710,7 +776,8 @@ class KirakaraAssGenerator:
                                 layout.y,
                                 alignment=7,
                                 fade_out=fade_out,
-                            ),
+                            )
+                            + spacing,
                             escape_ass_text(chunk.text),
                         )
                     )

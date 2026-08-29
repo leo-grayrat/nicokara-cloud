@@ -382,6 +382,7 @@ class MMSForcedAligner:
                         end_ms=end_ms,
                         confidence=confidence,
                         moras=moras,
+                        pronunciation_segments=token.pronunciation_segments,
                     )
                 )
             if not aligned_tokens:

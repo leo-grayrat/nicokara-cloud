@@ -6,6 +6,13 @@ export type CloudAlignedMora = {
   confidence: number;
 };
 
+export type CloudPronunciationSegment = {
+  surface_start: number;
+  surface_end: number;
+  reading: string;
+  ruby: boolean;
+};
+
 export type CloudAlignedToken = {
   surface: string;
   reading: string;
@@ -13,6 +20,7 @@ export type CloudAlignedToken = {
   end_ms: number;
   confidence: number;
   moras: CloudAlignedMora[];
+  pronunciation_segments?: CloudPronunciationSegment[];
 };
 
 export type CloudAlignedLine = {
@@ -43,6 +51,7 @@ export type KirakaraRuby = {
   text: string;
   startCharacter: number;
   endCharacter: number;
+  readingStart?: number;
 };
 
 export type KirakaraRenderUnit = {
@@ -52,6 +61,7 @@ export type KirakaraRenderUnit = {
   endMs: number;
   moras: KirakaraMora[];
   ruby?: KirakaraRuby[];
+  atomicBase?: boolean;
 };
 
 export type KirakaraLine = {
@@ -184,6 +194,46 @@ export function kanjiRuby(surface: string, reading: string): KirakaraRuby[] {
     startCharacter,
     endCharacter,
   }));
+}
+
+function explicitPronunciation(
+  token: CloudAlignedToken,
+): { ruby: KirakaraRuby[]; atomicBase: boolean } | null {
+  const segments = token.pronunciation_segments;
+  const surfaceLength = [...token.surface].length;
+  if (!segments?.length) return null;
+  if (
+    segments[0].surface_start !== 0
+    || segments.at(-1)?.surface_end !== surfaceLength
+    || segments.some((segment, index) =>
+      segment.surface_start < 0
+      || segment.surface_end <= segment.surface_start
+      || segment.surface_end > surfaceLength
+      || (index > 0
+        && segments[index - 1].surface_end !== segment.surface_start),
+    )
+    || normalizeKana(segments.map((segment) => segment.reading).join(""))
+      !== normalizeKana(token.reading)
+  ) return null;
+
+  let readingStart = 0;
+  const ruby = segments.flatMap((segment) => {
+    const reading = normalizeKana(segment.reading);
+    const currentStart = readingStart;
+    readingStart += [...reading].length;
+    return segment.ruby ? [{
+      text: reading,
+      startCharacter: segment.surface_start,
+      endCharacter: segment.surface_end,
+      readingStart: currentStart,
+    }] : [];
+  });
+  return {
+    ruby,
+    atomicBase: segments.length === 1
+      && segments[0].surface_start === 0
+      && segments[0].surface_end === surfaceLength,
+  };
 }
 
 export function closeLineMoraGaps(line: KirakaraLine): KirakaraLine {
@@ -371,6 +421,7 @@ export function toKirakaraTimeline(source: CloudLyricTimeline): KirakaraTimeline
     const shiftMs = startMs - sourceLineRange.startMs;
     let units = line.tokens.map((token) => {
       const tokenRange = normalizedRange(token.start_ms, token.end_ms);
+      const explicit = explicitPronunciation(token);
       return {
         text: token.surface,
         reading: token.reading,
@@ -385,7 +436,8 @@ export function toKirakaraTimeline(source: CloudLyricTimeline): KirakaraTimeline
             matched: mora.matched,
           };
         }),
-        ruby: kanjiRuby(token.surface, token.reading),
+        ruby: explicit?.ruby ?? kanjiRuby(token.surface, token.reading),
+        atomicBase: explicit?.atomicBase ?? false,
       };
     });
     if (sourceDuration === 0 || !units.some((unit) => unit.endMs > unit.startMs)) {
@@ -536,7 +588,8 @@ function frameRuby(
   const segments = moraSegments(unit);
   const segmentText = segments.map(({ text }) => text).join("");
   const normalizedRuby = normalizeKana(ruby.text);
-  const matchStart = segmentText.indexOf(normalizedRuby);
+  const matchStart = ruby.readingStart
+    ?? segmentText.indexOf(normalizedRuby);
   if (segments.length <= 1 || matchStart < 0) {
     const characters = [...ruby.text];
     const position = fallbackProgress * characters.length;
@@ -617,10 +670,12 @@ function unitFrame(unit: KirakaraRenderUnit, playbackMs: number): KirakaraFrameU
       frameRuby(unit, ruby, playbackMs, progress),
     ),
     progress,
-    characters: characters.map((text, index) => ({
-      text,
-      progress: clampProgress(characterPosition - index),
-    })),
+    characters: unit.atomicBase
+      ? [{ text: unit.text, progress }]
+      : characters.map((text, index) => ({
+          text,
+          progress: clampProgress(characterPosition - index),
+        })),
   };
 }
 

@@ -25,6 +25,9 @@ def is_sung_text(text: str) -> bool:
 
 
 def character_chunks(token: AlignedToken) -> list[KaraokeChunk]:
+    mapped = _pronunciation_chunks(token)
+    if mapped is not None:
+        return mapped
     characters = list(token.surface)
     if not characters:
         return []
@@ -68,6 +71,67 @@ def character_chunks(token: AlignedToken) -> list[KaraokeChunk]:
     ]
 
 
+def _reading_time_ms(token: AlignedToken, character_offset: int) -> int:
+    segments = _mora_segments(token)
+    full_length = sum(len(text) for text, _, _ in segments)
+    if not segments or full_length == 0:
+        reading_length = max(1, len(normalize_reading(token.reading)))
+        bounded = min(reading_length, max(0, character_offset))
+        return round(
+            token.start_ms
+            + (token.end_ms - token.start_ms) * bounded / reading_length
+        )
+    bounded = min(full_length, max(0, character_offset))
+    if bounded == full_length:
+        return token.end_ms
+    cursor = 0
+    for text, start_ms, end_ms in segments:
+        segment_end = cursor + len(text)
+        if bounded < segment_end:
+            return round(
+                start_ms
+                + (end_ms - start_ms) * (bounded - cursor) / len(text)
+            )
+        cursor = segment_end
+    return token.end_ms
+
+
+def _pronunciation_chunks(
+    token: AlignedToken,
+) -> list[KaraokeChunk] | None:
+    segments = token.pronunciation_segments
+    if not segments:
+        return None
+    if (
+        segments[0].surface_start != 0
+        or segments[-1].surface_end != len(token.surface)
+        or any(
+            left.surface_end != right.surface_start
+            for left, right in zip(segments, segments[1:])
+        )
+        or "".join(normalize_reading(segment.reading) for segment in segments)
+        != normalize_reading(token.reading)
+    ):
+        return None
+
+    chunks: list[KaraokeChunk] = []
+    reading_offset = 0
+    for segment in segments:
+        normalized = normalize_reading(segment.reading)
+        start_ms = _reading_time_ms(token, reading_offset)
+        reading_offset += len(normalized)
+        end_ms = _reading_time_ms(token, reading_offset)
+        chunks.append(
+            KaraokeChunk(
+                text=token.surface[
+                    segment.surface_start : segment.surface_end
+                ],
+                duration_cs=max(0, round((end_ms - start_ms) / 10)),
+            )
+        )
+    return chunks
+
+
 def _mora_segments(token: AlignedToken) -> list[tuple[str, int, int]]:
     result: list[tuple[str, int, int]] = []
     for index, mora in enumerate(token.moras):
@@ -100,13 +164,22 @@ def _sequence_time_ms(token: AlignedToken, position: float) -> int:
     return round(start_ms + (end_ms - start_ms) * progress)
 
 
-def ruby_chunks(token: AlignedToken, reading: str) -> list[KaraokeChunk]:
+def ruby_chunks(
+    token: AlignedToken,
+    reading: str,
+    *,
+    reading_start: int | None = None,
+) -> list[KaraokeChunk]:
     normalized = normalize_reading(reading)
     if not normalized:
         return []
     segments = _mora_segments(token)
     full_reading = "".join(text for text, _, _ in segments)
-    match_start = full_reading.find(normalized)
+    match_start = (
+        reading_start
+        if reading_start is not None
+        else full_reading.find(normalized)
+    )
     if segments and match_start >= 0:
         chunks: list[KaraokeChunk] = []
         character_offset = 0
@@ -145,11 +218,20 @@ def ruby_chunks(token: AlignedToken, reading: str) -> list[KaraokeChunk]:
     ]
 
 
-def ruby_start_ms(token: AlignedToken, reading: str) -> int:
+def ruby_start_ms(
+    token: AlignedToken,
+    reading: str,
+    *,
+    reading_start: int | None = None,
+) -> int:
     normalized = normalize_reading(reading)
     segments = _mora_segments(token)
     full_reading = "".join(text for text, _, _ in segments)
-    match_start = full_reading.find(normalized)
+    match_start = (
+        reading_start
+        if reading_start is not None
+        else full_reading.find(normalized)
+    )
     if not segments or match_start < 0:
         return token.start_ms
     character_offset = 0

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
+from app.lyrics.pronunciation import PronunciationSegment
+
 
 @dataclass(frozen=True)
 class AlignedMora:
@@ -21,6 +23,9 @@ class AlignedToken:
     end_ms: int
     confidence: float
     moras: list[AlignedMora] = field(default_factory=list)
+    pronunciation_segments: list[PronunciationSegment] = field(
+        default_factory=list
+    )
 
 
 @dataclass(frozen=True)

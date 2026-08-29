@@ -24,6 +24,14 @@ export type ProcessedLyricToken = {
   surface: string;
   reading: string;
   alignment_pronunciation?: string | null;
+  pronunciation_segments?: ProcessedPronunciationSegment[];
+};
+
+export type ProcessedPronunciationSegment = {
+  surface_start: number;
+  surface_end: number;
+  reading: string;
+  ruby: boolean;
 };
 
 export type ProcessedReadingReviewUnit = {
